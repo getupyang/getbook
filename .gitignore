@@ -3,5 +3,6 @@ dist/
 .DS_Store
 .env
 .env.*
+!.env.example
 figma设计.zip
 figma设计/

@@ -12,6 +12,7 @@ import {
   Plus,
   RotateCcw,
 } from "lucide-react";
+import { analyzeCapture } from "./analysis";
 import { compressImage } from "./image";
 import {
   AppState,
@@ -243,12 +244,12 @@ function RecordCard({ record, onTap }: { record: BookRecord; onTap: () => void }
             <StatusBadge status={record.status} />
           </div>
 
-          {record.status === "processed" && record.quote ? (
+          {record.status === "processed" && (record.quote || record.thought) ? (
             <p
               className="text-sm text-foreground leading-snug line-clamp-2 italic"
               style={{ fontFamily: "'Lora', serif" }}
             >
-              "{record.quote}"
+              {record.quote ? `"${record.quote}"` : record.thought}
             </p>
           ) : (
             <p className="text-sm text-foreground/70 leading-snug line-clamp-2">
@@ -501,6 +502,42 @@ function DetailScreen({
   onRetry: () => void;
 }) {
   const [rawOpen, setRawOpen] = useState(record.status !== "processed");
+  const pendingCopy = {
+    saved: {
+      title: "已保存，等待整理",
+      body: "原始照片和文字已经保存在本机。",
+      cls: "bg-stone-50 border-stone-100",
+      titleCls: "text-stone-700",
+      bodyCls: "text-stone-500",
+      icon: <Check className="w-4 h-4 text-stone-500" />,
+    },
+    processing: {
+      title: "正在整理",
+      body: "AI 正在从照片和输入里识别划线句、想法和页码。",
+      cls: "bg-amber-50 border-amber-100",
+      titleCls: "text-amber-700",
+      bodyCls: "text-amber-600/80",
+      icon: <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />,
+    },
+    failed: {
+      title: "整理失败，原始记录还在",
+      body: "原始照片和文字已经保存在本机，可以稍后重试。",
+      cls: "bg-red-50 border-red-100",
+      titleCls: "text-red-700",
+      bodyCls: "text-red-500/80",
+      icon: <AlertCircle className="w-4 h-4 text-red-500" />,
+    },
+  } satisfies Record<
+    Exclude<RecordStatus, "processed">,
+    {
+      title: string;
+      body: string;
+      cls: string;
+      titleCls: string;
+      bodyCls: string;
+      icon: ReactElement;
+    }
+  >;
 
   return (
     <div className="h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
@@ -530,33 +567,19 @@ function DetailScreen({
 
         {record.status !== "processed" && (
           <div
-            className={`border rounded-2xl px-4 py-3.5 flex items-start gap-3 ${
-              record.status === "failed"
-                ? "bg-red-50 border-red-100"
-                : "bg-stone-50 border-stone-100"
-            }`}
+            className={`border rounded-2xl px-4 py-3.5 flex items-start gap-3 ${pendingCopy[record.status].cls}`}
           >
             <div className="mt-0.5 shrink-0">
-              {record.status === "failed" ? (
-                <AlertCircle className="w-4 h-4 text-red-500" />
-              ) : (
-                <Check className="w-4 h-4 text-stone-500" />
-              )}
+              {pendingCopy[record.status].icon}
             </div>
             <div>
-              <p
-                className={`text-sm font-medium ${
-                  record.status === "failed" ? "text-red-700" : "text-stone-700"
-                }`}
-              >
-                {record.status === "failed" ? "整理失败，原始记录还在" : "已保存"}
+              <p className={`text-sm font-medium ${pendingCopy[record.status].titleCls}`}>
+                {pendingCopy[record.status].title}
               </p>
               <p
-                className={`text-xs mt-0.5 leading-relaxed ${
-                  record.status === "failed" ? "text-red-500/80" : "text-stone-500"
-                }`}
+                className={`text-xs mt-0.5 leading-relaxed ${pendingCopy[record.status].bodyCls}`}
               >
-                原始照片和文字已经保存在本机。
+                {pendingCopy[record.status].body}
               </p>
             </div>
           </div>
@@ -572,7 +595,7 @@ function DetailScreen({
                 className="text-[15px] text-foreground leading-relaxed italic"
                 style={{ fontFamily: "'Lora', serif" }}
               >
-                "{record.quote}"
+                {record.quote ? `"${record.quote}"` : "未识别"}
               </p>
             </div>
 
@@ -620,13 +643,13 @@ function DetailScreen({
           )}
         </div>
 
-        {record.status === "failed" && (
+        {(record.status === "saved" || record.status === "failed") && (
           <button
             onClick={onRetry}
             className="w-full flex items-center justify-center gap-2 border border-border bg-card rounded-2xl py-4 text-[15px] font-medium text-foreground active:scale-[0.98] transition-transform"
           >
             <RotateCcw className="w-4 h-4" />
-            重试整理
+            {record.status === "failed" ? "重试整理" : "整理这条"}
           </button>
         )}
       </div>
@@ -744,10 +767,12 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("bookshelf");
   const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
   const [storageError, setStorageError] = useState("");
+  const stateRef = useRef<AppState | null>(null);
 
   useEffect(() => {
     loadAppState()
       .then((loaded) => {
+        stateRef.current = loaded;
         setState(loaded);
         if (loaded.activeBookId && loaded.books.length > 0) {
           setScreen("book");
@@ -770,6 +795,7 @@ export default function App() {
   }, [activeBook, activeRecordId]);
 
   const persist = async (nextState: AppState) => {
+    stateRef.current = nextState;
     setState(nextState);
     setStorageError("");
     try {
@@ -787,6 +813,68 @@ export default function App() {
       activeBookId: nextBook.id,
       books: state.books.map((book) => (book.id === nextBook.id ? nextBook : book)),
     });
+  };
+
+  const findBookTitle = (baseState: AppState, recordId: string) => {
+    return baseState.books.find((book) =>
+      book.records.some((record) => record.id === recordId)
+    )?.title;
+  };
+
+  const changeRecord = async (
+    recordId: string,
+    updater: (record: BookRecord) => BookRecord,
+    baseState = stateRef.current
+  ) => {
+    if (!baseState) return null;
+
+    let updatedRecord: BookRecord | null = null;
+    const nextState: AppState = {
+      ...baseState,
+      books: baseState.books.map((book) => ({
+        ...book,
+        records: book.records.map((record) => {
+          if (record.id !== recordId) return record;
+          updatedRecord = updater(record);
+          return updatedRecord;
+        }),
+      })),
+    };
+
+    const record = updatedRecord as BookRecord | null;
+    if (!record) return null;
+    await persist(nextState);
+    return { nextState, record };
+  };
+
+  const analyzeRecord = async (recordId: string, baseState = stateRef.current) => {
+    const started = await changeRecord(
+      recordId,
+      (record) => ({ ...record, status: "processing" }),
+      baseState
+    );
+    if (!started) return;
+
+    try {
+      const analysis = await analyzeCapture({
+        imageDataUrl: started.record.photoUrl,
+        rawInput: started.record.rawInput,
+        bookTitle: findBookTitle(started.nextState, recordId) ?? "",
+      });
+
+      await changeRecord(recordId, (record) => ({
+        ...record,
+        quote: analysis.quote,
+        thought: analysis.thought,
+        page: analysis.page,
+        status: "processed",
+      }));
+    } catch {
+      await changeRecord(recordId, (record) => ({
+        ...record,
+        status: "failed",
+      }));
+    }
   };
 
   const addBook = async (title: string, author: string) => {
@@ -811,23 +899,31 @@ export default function App() {
   };
 
   const saveRecord = async (record: BookRecord) => {
-    await updateActiveBook((book) => ({
-      ...book,
+    const baseState = stateRef.current;
+    if (!baseState || !activeBook) return;
+
+    const currentBook =
+      baseState.books.find((book) => book.id === activeBook.id) ?? activeBook;
+    const nextBook = {
+      ...currentBook,
       lastActive: record.timestamp,
-      records: [record, ...book.records],
-    }));
+      records: [record, ...currentBook.records],
+    };
+    const nextState = {
+      ...baseState,
+      activeBookId: nextBook.id,
+      books: baseState.books.map((book) => (book.id === nextBook.id ? nextBook : book)),
+    };
+
+    await persist(nextState);
     setActiveRecordId(record.id);
     setScreen("detail");
+    void analyzeRecord(record.id, nextState);
   };
 
   const retryRecord = async () => {
     if (!activeRecord) return;
-    await updateActiveBook((book) => ({
-      ...book,
-      records: book.records.map((record) =>
-        record.id === activeRecord.id ? { ...record, status: "saved" } : record
-      ),
-    }));
+    void analyzeRecord(activeRecord.id);
   };
 
   const saveEditedRecord = async (patch: Pick<BookRecord, "quote" | "thought" | "page">) => {
