@@ -23,3 +23,14 @@
 - 已验证：修复后本地跑过 `npm test`、`npm run typecheck`、`npm run build`。
 - 适用范围：仅修复 Vercel Function 打包/运行时问题，不改变前端交互和数据模型。
 - 可能过时的地方：如果以后把 API runtime 改成另一个框架或显式 Edge runtime，这条修复记录只作为当时 Vercel Node Function 状态参考。
+
+## 2026-05-27 · Qwen Multimodal Message Compatibility
+
+- 记录时间：2026-05-27 00:01 Asia/Shanghai
+- 关联 commit：待提交
+- 改了什么：移除 OpenRouter 请求中的独立 `system` message，把整理规则合并到 `user` prompt 内。
+- 为什么改：生产环境真实调用 `qwen/qwen3.6-flash` 时，Alibaba provider 返回 `System message must be at the beginning`；为避免 provider 对多模态 messages 结构的兼容问题，改成单条 user multimodal message。
+- 用户如何验收：重新部署后，用不含私人内容的测试图片请求 `/api/analyze` 不应再因为 system message 报错；iPhone 端真实拍照记录应能进入模型识别。
+- 已验证：待重新运行本地测试和线上 smoke。
+- 适用范围：仅调整 OpenRouter 请求消息结构，不改变字段 schema 和前端状态流。
+- 可能过时的地方：如果未来切换到其他 provider 或自建 Qwen 接口，可能可以重新使用 system role。

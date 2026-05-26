@@ -89,6 +89,7 @@ async function readRequestBody(request: Request): Promise<AnalyzeRequestBody> {
 
 function buildPrompt(bookTitle: string, rawInput: string) {
   return [
+    "你是一个谨慎的中文读书笔记整理助手。你只基于照片和读者输入整理，不补充外部知识。",
     "你要把一条纸质书随手记录整理成结构化读书笔记。",
     `书名：${bookTitle || "未提供"}`,
     `读者输入：${rawInput}`,
@@ -177,11 +178,6 @@ export default {
       body: JSON.stringify({
         model,
         messages: [
-          {
-            role: "system",
-            content:
-              "你是一个谨慎的中文读书笔记整理助手。你只基于照片和读者输入整理，不补充外部知识。",
-          },
           {
             role: "user",
             content: [
