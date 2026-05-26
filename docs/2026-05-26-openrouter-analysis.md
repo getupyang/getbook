@@ -38,7 +38,7 @@
 ## 2026-05-27 · Photo Highlight Capture
 
 - 记录时间：2026-05-27 00:18 Asia/Shanghai
-- 关联 commit：待提交
+- 关联 commit：7f804108fe03fe126f898c2731372087394249d6
 - 改了什么：新记录页的照片入口改为“拍照或从相册选择”；照片添加后默认进入可划线状态，用户可用半透明黄色荧光笔直接划出原文，并可撤销或清除；保存时记录原始照片、归一化划线轨迹和合成后的黄色标记图，AI 整理时优先使用标记图。
 - 涉及文件：`src/app/App.tsx`、`src/app/model.ts`、`src/app/highlight.ts`、`src/app/highlight.test.ts`、`src/app/analysis.ts`、`api/analyze.ts`
 - 为什么改：现场照片可能包含透视、书脊、相邻页面和遮挡，单靠 OCR 猜测用户想记录哪一句不稳定；让用户“手指划一下”可以把选择意图显式传给 AI，同时保持读书当下的低摩擦。
