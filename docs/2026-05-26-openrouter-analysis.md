@@ -16,7 +16,7 @@
 ## 2026-05-26 · Vercel API Runtime Fix
 
 - 记录时间：2026-05-26 23:58 Asia/Shanghai
-- 关联 commit：待提交
+- 关联 commit：c9cefcec147062abd70d4835b1b0871d7933afef
 - 改了什么：把 `/api/analyze` 运行时需要的结果规范化逻辑内联到 API 文件，避免 Vercel Function 在生产环境解析 `../src/app/analysis` 时出现 `ERR_MODULE_NOT_FOUND`。
 - 为什么改：首次 production 部署后，首页可访问，但 `/api/analyze` 返回 `FUNCTION_INVOCATION_FAILED`；Vercel logs 显示根因是 serverless function 跨目录 import 解析失败。
 - 用户如何验收：重新部署后，请求 `POST /api/analyze` 且 body 为 `{}` 时应返回应用自己的 400 JSON，而不是 Vercel 平台级 500；iPhone 端拍照记录后应能进入真实 OpenRouter 调用。
