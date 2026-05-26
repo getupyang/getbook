@@ -8,6 +8,7 @@ export interface AnalyzeCaptureInput {
   imageDataUrl: string;
   rawInput: string;
   bookTitle: string;
+  hasHighlights?: boolean;
 }
 
 function readString(value: unknown) {

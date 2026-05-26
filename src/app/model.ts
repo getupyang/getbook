@@ -1,9 +1,20 @@
 export type RecordStatus = "saved" | "processing" | "processed" | "failed";
 
+export interface HighlightPoint {
+  x: number;
+  y: number;
+}
+
+export interface HighlightStroke {
+  points: HighlightPoint[];
+}
+
 export interface BookRecord {
   id: string;
   status: RecordStatus;
   photoUrl: string;
+  markedPhotoUrl?: string;
+  highlightStrokes?: HighlightStroke[];
   rawInput: string;
   timestamp: string;
   createdAt: string;
@@ -72,6 +83,8 @@ export function createBook(title: string, author?: string, now = new Date()): Bo
 
 export function createCapture(params: {
   photoUrl: string;
+  markedPhotoUrl?: string;
+  highlightStrokes?: HighlightStroke[];
   rawInput: string;
   now?: Date;
 }): BookRecord {
@@ -88,6 +101,8 @@ export function createCapture(params: {
     id: makeId("record"),
     status: "saved",
     photoUrl: params.photoUrl,
+    markedPhotoUrl: params.markedPhotoUrl,
+    highlightStrokes: params.highlightStrokes,
     rawInput,
     timestamp: formatTimestamp(now),
     createdAt: now.toISOString(),

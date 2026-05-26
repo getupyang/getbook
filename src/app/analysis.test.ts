@@ -58,6 +58,7 @@ describe("analysis", () => {
       imageDataUrl: "data:image/jpeg;base64,abc",
       rawInput: "我说第12页这句话让我想到行动",
       bookTitle: "测试书",
+      hasHighlights: true,
     });
 
     expect(result.quote).toBe("纸上得来终觉浅");
@@ -70,6 +71,7 @@ describe("analysis", () => {
           imageDataUrl: "data:image/jpeg;base64,abc",
           rawInput: "我说第12页这句话让我想到行动",
           bookTitle: "测试书",
+          hasHighlights: true,
         }),
       })
     );

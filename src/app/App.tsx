@@ -1,4 +1,12 @@
-import { ChangeEvent, ReactElement, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertCircle,
   Camera,
@@ -11,13 +19,23 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Undo2,
+  X,
 } from "lucide-react";
 import { analyzeCapture } from "./analysis";
+import {
+  HIGHLIGHT_STROKE_COLOR,
+  clampHighlightPoint,
+  createMarkedPhotoUrl,
+  drawHighlightStrokes,
+  hasHighlightStrokes,
+} from "./highlight";
 import { compressImage } from "./image";
 import {
   AppState,
   Book,
   BookRecord,
+  HighlightStroke,
   RecordStatus,
   createBook,
   createCapture,
@@ -227,7 +245,7 @@ function RecordCard({ record, onTap }: { record: BookRecord; onTap: () => void }
         <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-muted">
           {record.photoUrl ? (
             <img
-              src={record.photoUrl}
+              src={record.markedPhotoUrl ?? record.photoUrl}
               alt="书页照片"
               className="w-full h-full object-cover"
             />
@@ -328,7 +346,7 @@ function BookScreen({
           className="w-full flex items-center justify-center gap-2.5 bg-foreground text-primary-foreground rounded-2xl py-4 text-[15px] font-medium active:scale-[0.98] transition-transform"
         >
           <Camera className="w-5 h-5" />
-          拍照记录
+          添加记录
         </button>
       </div>
 
@@ -349,10 +367,227 @@ function BookScreen({
         <div className="px-5 py-12 flex flex-col items-center text-center">
           <p className="text-muted-foreground text-sm">还没有记录</p>
           <p className="text-muted-foreground/60 text-xs mt-1">
-            拍一张照片开始记录
+            添加一张书页照片开始记录
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function HighlightPhotoEditor({
+  photoUrl,
+  strokes,
+  busy,
+  onChange,
+  onChangePhoto,
+  onRemovePhoto,
+}: {
+  photoUrl: string;
+  strokes: HighlightStroke[];
+  busy: boolean;
+  onChange: (strokes: HighlightStroke[]) => void;
+  onChangePhoto: () => void;
+  onRemovePhoto: () => void;
+}) {
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
+  const strokesRef = useRef(strokes);
+  const [hintVisible, setHintVisible] = useState(true);
+  const hasStrokes = hasHighlightStrokes(strokes);
+
+  useEffect(() => {
+    strokesRef.current = strokes;
+  }, [strokes]);
+
+  const renderCanvas = () => {
+    const canvas = canvasRef.current;
+    const image = imageRef.current;
+    if (!canvas || !image) return;
+
+    const rect = image.getBoundingClientRect();
+    const pixelRatio = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * pixelRatio));
+    canvas.height = Math.max(1, Math.round(rect.height * pixelRatio));
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawHighlightStrokes(
+      ctx,
+      strokesRef.current,
+      canvas.width,
+      canvas.height,
+      Math.max(16, canvas.width * 0.04)
+    );
+  };
+
+  useEffect(() => {
+    renderCanvas();
+  });
+
+  useEffect(() => {
+    const handleResize = () => renderCanvas();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!photoUrl) return;
+    setHintVisible(true);
+    const timer = window.setTimeout(() => setHintVisible(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [photoUrl]);
+
+  const pointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return clampHighlightPoint({
+      x: (event.clientX - rect.left) / rect.width,
+      y: (event.clientY - rect.top) / rect.height,
+    });
+  };
+
+  const setStrokes = (next: HighlightStroke[]) => {
+    strokesRef.current = next;
+    onChange(next);
+  };
+
+  const startStroke = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (busy) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drawingRef.current = true;
+    setHintVisible(false);
+    setStrokes([...strokesRef.current, { points: [point] }]);
+  };
+
+  const addPoint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+
+    const current = strokesRef.current;
+    const last = current[current.length - 1];
+    if (!last) return;
+
+    const previous = last.points[last.points.length - 1];
+    if (previous) {
+      const distance = Math.hypot(point.x - previous.x, point.y - previous.y);
+      if (distance < 0.004) return;
+    }
+
+    setStrokes([
+      ...current.slice(0, -1),
+      {
+        points: [...last.points, point],
+      },
+    ]);
+  };
+
+  const finishStroke = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    const current = strokesRef.current;
+    const last = current[current.length - 1];
+    if (last && last.points.length < 2) {
+      setStrokes(current.slice(0, -1));
+    }
+  };
+
+  const undo = () => {
+    if (!hasStrokes || busy) return;
+    setStrokes(strokesRef.current.slice(0, -1));
+  };
+
+  const clear = () => {
+    if (!hasStrokes || busy) return;
+    setStrokes([]);
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <div className="relative w-full rounded-2xl overflow-hidden bg-muted">
+        <img
+          ref={imageRef}
+          src={photoUrl}
+          alt="书页照片"
+          className="block w-full h-auto select-none"
+          draggable={false}
+          onLoad={renderCanvas}
+        />
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
+          style={{ touchAction: "none" }}
+          onPointerDown={startStroke}
+          onPointerMove={addPoint}
+          onPointerUp={finishStroke}
+          onPointerCancel={finishStroke}
+          aria-label="在书页照片上划出想记录的原文"
+        />
+
+        {hintVisible && !hasStrokes && (
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center pointer-events-none">
+            <span className="rounded-full bg-black/55 px-4 py-2 text-xs font-medium text-white">
+              在文字上划一下
+            </span>
+          </div>
+        )}
+
+        <button
+          onClick={onChangePhoto}
+          disabled={busy}
+          className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-black/50 text-white text-xs disabled:opacity-50"
+        >
+          换照片
+        </button>
+        <button
+          onClick={onRemovePhoto}
+          disabled={busy}
+          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center disabled:opacity-50"
+          aria-label="移除照片"
+        >
+          <X className="w-3.5 h-3.5 text-white" />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-card px-3 py-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="w-3 h-3 rounded-full shrink-0"
+            style={{ backgroundColor: HIGHLIGHT_STROKE_COLOR }}
+          />
+          <p className="text-xs text-foreground font-medium">荧光笔开启</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={undo}
+            disabled={!hasStrokes || busy}
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-muted-foreground disabled:opacity-35"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+            撤销
+          </button>
+          <button
+            onClick={clear}
+            disabled={!hasStrokes || busy}
+            className="rounded-full px-2.5 py-1.5 text-xs text-muted-foreground disabled:opacity-35"
+          >
+            清除
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -369,6 +604,7 @@ function NewRecordScreen({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [thought, setThought] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [highlightStrokes, setHighlightStrokes] = useState<HighlightStroke[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -381,6 +617,7 @@ function NewRecordScreen({
     try {
       const image = await compressImage(file);
       setPhotoUrl(image.dataUrl);
+      setHighlightStrokes([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "照片处理失败");
     } finally {
@@ -391,10 +628,29 @@ function NewRecordScreen({
 
   const save = async () => {
     setError("");
+    setBusy(true);
     try {
-      await onSave(createCapture({ photoUrl, rawInput: thought }));
+      let markedPhotoUrl: string | undefined;
+      try {
+        markedPhotoUrl = await createMarkedPhotoUrl(photoUrl, highlightStrokes);
+      } catch {
+        markedPhotoUrl = undefined;
+      }
+
+      await onSave(
+        createCapture({
+          photoUrl,
+          markedPhotoUrl,
+          highlightStrokes: hasHighlightStrokes(highlightStrokes)
+            ? highlightStrokes
+            : undefined,
+          rawInput: thought,
+        })
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -417,7 +673,6 @@ function NewRecordScreen({
           ref={inputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           className="hidden"
           onChange={handlePhoto}
         />
@@ -437,30 +692,25 @@ function NewRecordScreen({
             </div>
             <div className="text-center">
               <p className="text-sm font-medium text-foreground">
-                {busy ? "正在压缩照片" : "拍照"}
+                {busy ? "正在压缩照片" : "添加书页照片"}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                拍下书中划线内容
+                拍照或从相册选择
               </p>
             </div>
           </button>
         ) : (
-          <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-muted">
-            <img src={photoUrl} alt="拍摄的书页" className="w-full h-full object-cover" />
-            <button
-              onClick={() => inputRef.current?.click()}
-              className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-black/50 text-white text-xs"
-            >
-              换照片
-            </button>
-            <button
-              onClick={() => setPhotoUrl("")}
-              className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center"
-              aria-label="移除照片"
-            >
-              <span className="text-white text-xs">x</span>
-            </button>
-          </div>
+          <HighlightPhotoEditor
+            photoUrl={photoUrl}
+            strokes={highlightStrokes}
+            busy={busy}
+            onChange={setHighlightStrokes}
+            onChangePhoto={() => inputRef.current?.click()}
+            onRemovePhoto={() => {
+              setPhotoUrl("");
+              setHighlightStrokes([]);
+            }}
+          />
         )}
 
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
@@ -483,7 +733,7 @@ function NewRecordScreen({
           disabled={busy || !photoUrl || !thought.trim()}
           className="w-full bg-foreground text-primary-foreground rounded-2xl py-4 text-[15px] font-medium active:scale-[0.98] transition-transform disabled:opacity-40"
         >
-          保存
+          {busy ? "正在保存" : "保存"}
         </button>
       </div>
     </div>
@@ -561,8 +811,12 @@ function DetailScreen({
       </div>
 
       <div className="px-5 space-y-4 pb-10">
-        <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-muted">
-          <img src={record.photoUrl} alt="书页照片" className="w-full h-full object-cover" />
+        <div className="w-full rounded-2xl overflow-hidden bg-muted">
+          <img
+            src={record.markedPhotoUrl ?? record.photoUrl}
+            alt="书页照片"
+            className="block w-full h-auto"
+          />
         </div>
 
         {record.status !== "processed" && (
@@ -857,9 +1111,10 @@ export default function App() {
 
     try {
       const analysis = await analyzeCapture({
-        imageDataUrl: started.record.photoUrl,
+        imageDataUrl: started.record.markedPhotoUrl ?? started.record.photoUrl,
         rawInput: started.record.rawInput,
         bookTitle: findBookTitle(started.nextState, recordId) ?? "",
+        hasHighlights: hasHighlightStrokes(started.record.highlightStrokes),
       });
 
       await changeRecord(recordId, (record) => ({

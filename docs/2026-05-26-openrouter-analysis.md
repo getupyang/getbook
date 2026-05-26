@@ -34,3 +34,15 @@
 - 已验证：本地已运行 `npm test`、`npm run typecheck`、`npm run build`；production 部署后，`POST https://getbook-one.vercel.app/api/analyze` 使用 20x20 测试图和非私人测试文字返回 200 JSON：`quote=纸上得来终觉浅`、`thought=读书笔记应该能变成行动`、`page=12`。
 - 适用范围：仅调整 OpenRouter 请求消息结构，不改变字段 schema 和前端状态流。
 - 可能过时的地方：如果未来切换到其他 provider 或自建 Qwen 接口，可能可以重新使用 system role。
+
+## 2026-05-27 · Photo Highlight Capture
+
+- 记录时间：2026-05-27 00:18 Asia/Shanghai
+- 关联 commit：待提交
+- 改了什么：新记录页的照片入口改为“拍照或从相册选择”；照片添加后默认进入可划线状态，用户可用半透明黄色荧光笔直接划出原文，并可撤销或清除；保存时记录原始照片、归一化划线轨迹和合成后的黄色标记图，AI 整理时优先使用标记图。
+- 涉及文件：`src/app/App.tsx`、`src/app/model.ts`、`src/app/highlight.ts`、`src/app/highlight.test.ts`、`src/app/analysis.ts`、`api/analyze.ts`
+- 为什么改：现场照片可能包含透视、书脊、相邻页面和遮挡，单靠 OCR 猜测用户想记录哪一句不稳定；让用户“手指划一下”可以把选择意图显式传给 AI，同时保持读书当下的低摩擦。
+- 用户如何验收：在 iPhone 打开线上地址，点击“添加记录”，选择拍照或相册照片；照片出现后应看到“在文字上划一下”和“荧光笔开启”，在文字上划线后可撤销/清除，保存后记录应进入整理流程。
+- 已验证：本地已运行 `npm test`、`npm run typecheck`、`npm run build`。
+- 适用范围：当前只做自由手指荧光笔，不做裁剪、放大镜、颜色/粗细选择、橡皮擦或自动文字框识别。
+- 可能过时的地方：如果后续加入局部裁剪、多模型评测或真实 OCR 对齐，这里的 `markedPhotoUrl` 可能会变成多图输入的一部分。
