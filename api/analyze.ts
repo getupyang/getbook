@@ -1,9 +1,13 @@
-import { normalizeAnalysisResult } from "../src/app/analysis";
-
 interface AnalyzeRequestBody {
   imageDataUrl?: unknown;
   rawInput?: unknown;
   bookTitle?: unknown;
+}
+
+interface CaptureAnalysis {
+  quote?: string;
+  thought: string;
+  page?: number;
 }
 
 const ANALYSIS_SCHEMA = {
@@ -38,6 +42,40 @@ function json(data: unknown, init?: ResponseInit) {
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function readPage(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.round(value);
+  }
+
+  if (typeof value === "string") {
+    const number = Number(value.match(/\d+/)?.[0]);
+    if (Number.isFinite(number) && number > 0) return Math.round(number);
+  }
+
+  return undefined;
+}
+
+function normalizeAnalysisResult(value: unknown, fallbackThought = ""): CaptureAnalysis {
+  if (!value || typeof value !== "object") {
+    throw new Error("整理结果格式错误");
+  }
+
+  const source = value as Record<string, unknown>;
+  const quote = readString(source.quote) || undefined;
+  const thought = readString(source.thought) || fallbackThought.trim();
+  const page = readPage(source.page);
+
+  if (!thought) {
+    throw new Error("整理结果缺少想法");
+  }
+
+  return {
+    quote,
+    thought,
+    page,
+  };
 }
 
 async function readRequestBody(request: Request): Promise<AnalyzeRequestBody> {

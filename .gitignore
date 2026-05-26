@@ -6,3 +6,4 @@ dist/
 !.env.example
 figma设计.zip
 figma设计/
+.vercel
