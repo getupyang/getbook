@@ -31,6 +31,6 @@
 - 改了什么：移除 OpenRouter 请求中的独立 `system` message，把整理规则合并到 `user` prompt 内。
 - 为什么改：生产环境真实调用 `qwen/qwen3.6-flash` 时，Alibaba provider 返回 `System message must be at the beginning`；为避免 provider 对多模态 messages 结构的兼容问题，改成单条 user multimodal message。
 - 用户如何验收：重新部署后，用不含私人内容的测试图片请求 `/api/analyze` 不应再因为 system message 报错；iPhone 端真实拍照记录应能进入模型识别。
-- 已验证：本地已运行 `npm test`、`npm run typecheck`、`npm run build`；线上 smoke 在后续部署后记录。
+- 已验证：本地已运行 `npm test`、`npm run typecheck`、`npm run build`；production 部署后，`POST https://getbook-one.vercel.app/api/analyze` 使用 20x20 测试图和非私人测试文字返回 200 JSON：`quote=纸上得来终觉浅`、`thought=读书笔记应该能变成行动`、`page=12`。
 - 适用范围：仅调整 OpenRouter 请求消息结构，不改变字段 schema 和前端状态流。
 - 可能过时的地方：如果未来切换到其他 provider 或自建 Qwen 接口，可能可以重新使用 system role。
