@@ -150,11 +150,34 @@ export default {
       return json({ error: "只支持 POST" }, { status: 405 });
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.OPENROUTER_MODEL;
-    if (!apiKey || !model) {
+    const dashscopeKey = process.env.DASHSCOPE_API_KEY;
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    const openrouterModel = process.env.OPENROUTER_MODEL;
+
+    let upstreamUrl: string;
+    let upstreamHeaders: Record<string, string>;
+    let model: string;
+
+    if (dashscopeKey) {
+      upstreamUrl =
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+      upstreamHeaders = {
+        Authorization: `Bearer ${dashscopeKey}`,
+        "Content-Type": "application/json",
+      };
+      model = process.env.DASHSCOPE_MODEL ?? "qwen3.6-flash";
+    } else if (openrouterKey && openrouterModel) {
+      upstreamUrl = "https://openrouter.ai/api/v1/chat/completions";
+      upstreamHeaders = {
+        Authorization: `Bearer ${openrouterKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.OPENROUTER_SITE_URL ?? "https://getbook.local",
+        "X-Title": process.env.OPENROUTER_APP_TITLE ?? "Getbook",
+      };
+      model = openrouterModel;
+    } else {
       return json(
-        { error: "缺少 OPENROUTER_API_KEY 或 OPENROUTER_MODEL" },
+        { error: "缺少 DASHSCOPE_API_KEY，或 OPENROUTER_API_KEY 与 OPENROUTER_MODEL" },
         { status: 500 }
       );
     }
@@ -172,14 +195,9 @@ export default {
       return json({ error: "缺少读者输入" }, { status: 400 });
     }
 
-    const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const upstream = await fetch(upstreamUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": process.env.OPENROUTER_SITE_URL ?? "https://getbook.local",
-        "X-Title": process.env.OPENROUTER_APP_TITLE ?? "Getbook",
-      },
+      headers: upstreamHeaders,
       body: JSON.stringify({
         model,
         messages: [
@@ -216,7 +234,7 @@ export default {
     if (!upstream.ok) {
       const detail = await upstream.text().catch(() => "");
       return json(
-        { error: detail || `OpenRouter 请求失败：${upstream.status}` },
+        { error: detail || `模型服务请求失败：${upstream.status}` },
         { status: 502 }
       );
     }
