@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createBook, createCapture, formatTimestamp } from "./model";
+import {
+  AppState,
+  createBook,
+  createCapture,
+  formatTimestamp,
+  recoverStaleRecords,
+} from "./model";
 
 describe("model", () => {
   it("creates a book with trimmed fields", () => {
@@ -40,5 +46,37 @@ describe("model", () => {
   it("formats recent timestamps for reading cards", () => {
     const text = formatTimestamp(new Date());
     expect(text.startsWith("今天 ")).toBe(true);
+  });
+
+  it("recovers stale processing records to failed on startup", () => {
+    const book = createBook("把自己作为方法");
+    const processing = {
+      ...createCapture({ photoUrl: "data:image/jpeg;base64,a", rawInput: "想法一" }),
+      status: "processing" as const,
+    };
+    const processed = {
+      ...createCapture({ photoUrl: "data:image/jpeg;base64,b", rawInput: "想法二" }),
+      status: "processed" as const,
+    };
+    const state: AppState = {
+      books: [{ ...book, records: [processing, processed] }],
+      activeBookId: book.id,
+    };
+
+    const result = recoverStaleRecords(state);
+
+    expect(result.changed).toBe(true);
+    expect(result.state.books[0].records[0].status).toBe("failed");
+    expect(result.state.books[0].records[1].status).toBe("processed");
+  });
+
+  it("leaves state untouched when no records are processing", () => {
+    const book = createBook("置身事内");
+    const state: AppState = { books: [book], activeBookId: null };
+
+    const result = recoverStaleRecords(state);
+
+    expect(result.changed).toBe(false);
+    expect(result.state).toBe(state);
   });
 });

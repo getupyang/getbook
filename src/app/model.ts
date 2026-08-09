@@ -81,6 +81,29 @@ export function createBook(title: string, author?: string, now = new Date()): Bo
   };
 }
 
+export function recoverStaleRecords(state: AppState): {
+  state: AppState;
+  changed: boolean;
+} {
+  // 整理请求不会在页面重开后存活，启动时残留的 processing 一律视为失败，可重试
+  let changed = false;
+  const books = state.books.map((book) => {
+    if (!book.records.some((record) => record.status === "processing")) {
+      return book;
+    }
+    changed = true;
+    return {
+      ...book,
+      records: book.records.map((record) =>
+        record.status === "processing"
+          ? { ...record, status: "failed" as const }
+          : record
+      ),
+    };
+  });
+  return changed ? { state: { ...state, books }, changed } : { state, changed };
+}
+
 export function createCapture(params: {
   photoUrl: string;
   markedPhotoUrl?: string;

@@ -40,6 +40,7 @@ import {
   createBook,
   createCapture,
   formatTimestamp,
+  recoverStaleRecords,
 } from "./model";
 import { loadAppState, saveAppState } from "./storage";
 
@@ -1025,9 +1026,13 @@ export default function App() {
 
   useEffect(() => {
     loadAppState()
-      .then((loaded) => {
+      .then((recovered) => {
+        const { state: loaded, changed } = recoverStaleRecords(recovered);
         stateRef.current = loaded;
         setState(loaded);
+        if (changed) {
+          void saveAppState(loaded).catch(() => {});
+        }
         if (loaded.activeBookId && loaded.books.length > 0) {
           setScreen("book");
         }

@@ -67,6 +67,10 @@ export async function analyzeCapture(input: AnalyzeCaptureInput) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(input),
+    signal:
+      typeof AbortSignal.timeout === "function"
+        ? AbortSignal.timeout(90_000)
+        : undefined,
   });
 
   const body = (await response.json().catch(() => null)) as unknown;
