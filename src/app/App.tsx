@@ -1023,6 +1023,7 @@ export default function App() {
   const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
   const [storageError, setStorageError] = useState("");
   const stateRef = useRef<AppState | null>(null);
+  const activeAnalysesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     loadAppState()
@@ -1041,6 +1042,27 @@ export default function App() {
         setStorageError(error instanceof Error ? error.message : "本地存储读取失败");
         setState({ books: [], activeBookId: null });
       });
+  }, []);
+
+  useEffect(() => {
+    // iOS 切走再切回不会重新加载页面，恢复可见时也要清理残留的整理中状态
+    const recoverOnResume = () => {
+      if (document.visibilityState !== "visible") return;
+      const current = stateRef.current;
+      if (!current) return;
+      const { state: next, changed } = recoverStaleRecords(
+        current,
+        activeAnalysesRef.current
+      );
+      if (changed) void persist(next);
+    };
+    document.addEventListener("visibilitychange", recoverOnResume);
+    window.addEventListener("pageshow", recoverOnResume);
+    return () => {
+      document.removeEventListener("visibilitychange", recoverOnResume);
+      window.removeEventListener("pageshow", recoverOnResume);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activeBook = useMemo(() => {
@@ -1114,6 +1136,7 @@ export default function App() {
     );
     if (!started) return;
 
+    activeAnalysesRef.current.add(recordId);
     try {
       const analysis = await analyzeCapture({
         imageDataUrl: started.record.markedPhotoUrl ?? started.record.photoUrl,
@@ -1134,6 +1157,8 @@ export default function App() {
         ...record,
         status: "failed",
       }));
+    } finally {
+      activeAnalysesRef.current.delete(recordId);
     }
   };
 

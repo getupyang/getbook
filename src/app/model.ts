@@ -81,23 +81,28 @@ export function createBook(title: string, author?: string, now = new Date()): Bo
   };
 }
 
-export function recoverStaleRecords(state: AppState): {
+export function recoverStaleRecords(
+  state: AppState,
+  activeIds?: ReadonlySet<string>
+): {
   state: AppState;
   changed: boolean;
 } {
-  // 整理请求不会在页面重开后存活，启动时残留的 processing 一律视为失败，可重试
+  // processing 状态只在本会话有真实在途请求（activeIds）时才合法；
+  // 其余的（上次会话残留）翻成 failed，让用户能重试
+  const isStale = (record: BookRecord) =>
+    record.status === "processing" && !activeIds?.has(record.id);
+
   let changed = false;
   const books = state.books.map((book) => {
-    if (!book.records.some((record) => record.status === "processing")) {
+    if (!book.records.some(isStale)) {
       return book;
     }
     changed = true;
     return {
       ...book,
       records: book.records.map((record) =>
-        record.status === "processing"
-          ? { ...record, status: "failed" as const }
-          : record
+        isStale(record) ? { ...record, status: "failed" as const } : record
       ),
     };
   });

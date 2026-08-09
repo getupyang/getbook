@@ -70,6 +70,28 @@ describe("model", () => {
     expect(result.state.books[0].records[1].status).toBe("processed");
   });
 
+  it("keeps records with in-flight analyses processing on resume", () => {
+    const book = createBook("把自己作为方法");
+    const inFlight = {
+      ...createCapture({ photoUrl: "data:image/jpeg;base64,a", rawInput: "想法一" }),
+      status: "processing" as const,
+    };
+    const stale = {
+      ...createCapture({ photoUrl: "data:image/jpeg;base64,b", rawInput: "想法二" }),
+      status: "processing" as const,
+    };
+    const state: AppState = {
+      books: [{ ...book, records: [inFlight, stale] }],
+      activeBookId: book.id,
+    };
+
+    const result = recoverStaleRecords(state, new Set([inFlight.id]));
+
+    expect(result.changed).toBe(true);
+    expect(result.state.books[0].records[0].status).toBe("processing");
+    expect(result.state.books[0].records[1].status).toBe("failed");
+  });
+
   it("leaves state untouched when no records are processing", () => {
     const book = createBook("置身事内");
     const state: AppState = { books: [book], activeBookId: null };

@@ -1,5 +1,6 @@
-export const MAX_IMAGE_DIMENSION = 1600;
-export const JPEG_QUALITY = 0.75;
+// 1100px/q0.6 实测：整理 30-44s → 9-15s，页码识别反而更稳（更小上传体积）
+export const MAX_IMAGE_DIMENSION = 1100;
+export const JPEG_QUALITY = 0.6;
 
 export interface CompressedImage {
   dataUrl: string;
