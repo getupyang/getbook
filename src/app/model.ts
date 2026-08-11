@@ -30,6 +30,7 @@ export interface Book {
   author?: string;
   records: BookRecord[];
   lastActive: string;
+  lastActiveAt?: string;
   lastExportedAt?: string;
 }
 

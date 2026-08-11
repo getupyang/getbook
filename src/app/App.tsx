@@ -212,7 +212,9 @@ function BookshelfScreen({
                 </span>
                 <span className="text-muted-foreground/40 text-xs">·</span>
                 <span className="text-xs text-muted-foreground">
-                  {book.lastActive}
+                  {book.lastActiveAt
+                    ? formatTimestamp(new Date(book.lastActiveAt))
+                    : book.lastActive}
                 </span>
                 {processingCount > 0 && (
                   <span className="inline-flex items-center gap-1 text-xs text-amber-600">
@@ -262,7 +264,9 @@ function RecordCard({ record, onTap }: { record: BookRecord; onTap: () => void }
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <span className="text-xs text-muted-foreground">{record.timestamp}</span>
+            <span className="text-xs text-muted-foreground">
+              {formatTimestamp(new Date(record.createdAt))}
+            </span>
             <StatusBadge status={record.status} />
           </div>
 
@@ -1003,7 +1007,9 @@ function DetailScreen({
 
         <div className="flex items-center justify-between">
           <StatusBadge status={record.status} />
-          <p className="text-xs text-muted-foreground">{record.timestamp}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatTimestamp(new Date(record.createdAt))}
+          </p>
         </div>
 
         <div className="border-t border-border pt-3">
@@ -1304,7 +1310,11 @@ export default function App() {
 
   const openBook = async (book: Book) => {
     if (!state) return;
-    const updatedBook = { ...book, lastActive: formatTimestamp() };
+    const updatedBook = {
+      ...book,
+      lastActive: formatTimestamp(),
+      lastActiveAt: new Date().toISOString(),
+    };
     await persist({
       ...state,
       activeBookId: book.id,
@@ -1322,6 +1332,7 @@ export default function App() {
     const nextBook = {
       ...currentBook,
       lastActive: record.timestamp,
+      lastActiveAt: record.createdAt,
       records: [record, ...currentBook.records],
     };
     const nextState = {
@@ -1433,16 +1444,16 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen flex justify-center bg-background text-foreground"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
+      className="flex justify-center bg-background text-foreground overscroll-none"
+      style={{ fontFamily: "'DM Sans', sans-serif", height: "100dvh" }}
     >
-      <div className="relative w-full max-w-[430px] min-h-screen bg-background overflow-hidden">
+      <div className="relative w-full max-w-[430px] h-full bg-background overflow-hidden flex flex-col">
         {storageError && (
           <div className="mx-4 mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
             {storageError}
           </div>
         )}
-        {appContent()}
+        <div className="flex-1 min-h-0">{appContent()}</div>
       </div>
     </div>
   );
