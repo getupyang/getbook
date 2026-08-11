@@ -14,6 +14,7 @@ export interface BookRecord {
   status: RecordStatus;
   photoUrl: string;
   markedPhotoUrl?: string;
+  thumbUrl?: string;
   highlightStrokes?: HighlightStroke[];
   rawInput: string;
   timestamp: string;
@@ -115,6 +116,7 @@ export function recoverStaleRecords(
 export function createCapture(params: {
   photoUrl: string;
   markedPhotoUrl?: string;
+  thumbUrl?: string;
   highlightStrokes?: HighlightStroke[];
   rawInput: string;
   now?: Date;
@@ -133,6 +135,7 @@ export function createCapture(params: {
     status: "saved",
     photoUrl: params.photoUrl,
     markedPhotoUrl: params.markedPhotoUrl,
+    thumbUrl: params.thumbUrl,
     highlightStrokes: params.highlightStrokes,
     rawInput,
     timestamp: formatTimestamp(now),

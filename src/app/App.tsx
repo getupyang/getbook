@@ -33,7 +33,7 @@ import {
   drawHighlightStrokes,
   hasHighlightStrokes,
 } from "./highlight";
-import { compressImage } from "./image";
+import { compressImage, createThumbnail } from "./image";
 import {
   AppState,
   Book,
@@ -251,7 +251,7 @@ function RecordCard({ record, onTap }: { record: BookRecord; onTap: () => void }
         <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-muted">
           {record.photoUrl ? (
             <img
-              src={record.markedPhotoUrl ?? record.photoUrl}
+              src={record.thumbUrl ?? record.markedPhotoUrl ?? record.photoUrl}
               alt="书页照片"
               className="w-full h-full object-cover"
             />
@@ -771,10 +771,18 @@ function NewRecordScreen({
         markedPhotoUrl = undefined;
       }
 
+      let thumbUrl: string | undefined;
+      try {
+        thumbUrl = await createThumbnail(markedPhotoUrl ?? photoUrl);
+      } catch {
+        thumbUrl = undefined;
+      }
+
       await onSave(
         createCapture({
           photoUrl,
           markedPhotoUrl,
+          thumbUrl,
           highlightStrokes: hasHighlightStrokes(highlightStrokes)
             ? highlightStrokes
             : undefined,
@@ -1212,6 +1220,43 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const thumbBackfillRan = useRef(false);
+  useEffect(() => {
+    if (!state || thumbBackfillRan.current) return;
+    thumbBackfillRan.current = true;
+    const pending = state.books.flatMap((book) =>
+      book.records.filter((record) => !record.thumbUrl && record.photoUrl)
+    );
+    if (pending.length === 0) return;
+    void (async () => {
+      const thumbs = new Map<string, string>();
+      for (const record of pending) {
+        try {
+          thumbs.set(
+            record.id,
+            await createThumbnail(record.markedPhotoUrl ?? record.photoUrl)
+          );
+        } catch {
+          // 单条失败跳过，下次启动再试
+        }
+      }
+      const current = stateRef.current;
+      if (thumbs.size === 0 || !current) return;
+      await persist({
+        ...current,
+        books: current.books.map((book) => ({
+          ...book,
+          records: book.records.map((record) =>
+            thumbs.has(record.id)
+              ? { ...record, thumbUrl: thumbs.get(record.id) }
+              : record
+          ),
+        })),
+      });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const pushScreen = (next: Screen, recordId?: string) => {
     setScreen(next);
