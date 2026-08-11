@@ -43,6 +43,7 @@ import {
   createBook,
   createCapture,
   formatTimestamp,
+  isRawInputRedundant,
   recoverStaleRecords,
 } from "./model";
 import { loadAppState, saveAppState } from "./storage";
@@ -859,7 +860,7 @@ function NewRecordScreen({
           <textarea
             value={thought}
             onChange={(event) => setThought(event.target.value)}
-            placeholder="说说这段让你想到什么"
+            placeholder="说说这段让你想到什么（可选，只划线也能保存）"
             rows={5}
             className="w-full px-4 pt-4 pb-4 bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground/60 resize-none focus:outline-none leading-relaxed"
             style={{ fontFamily: "'DM Sans', sans-serif" }}
@@ -872,7 +873,7 @@ function NewRecordScreen({
 
         <button
           onClick={save}
-          disabled={busy || !photoUrl || !thought.trim()}
+          disabled={busy || !photoUrl}
           className="w-full bg-foreground text-primary-foreground rounded-2xl py-4 text-[15px] font-medium active:scale-[0.98] transition-transform disabled:opacity-40"
         >
           {busy ? "正在保存" : "保存"}
@@ -995,12 +996,14 @@ function DetailScreen({
               </p>
             </div>
 
-            <div className="px-4 py-4 border-b border-border">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                我的想法
-              </p>
-              <p className="text-[15px] text-foreground leading-relaxed">{record.thought}</p>
-            </div>
+            {record.thought && (
+              <div className="px-4 py-4 border-b border-border">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+                  我的想法
+                </p>
+                <p className="text-[15px] text-foreground leading-relaxed">{record.thought}</p>
+              </div>
+            )}
 
             <div className="px-4 py-3.5 flex items-center justify-between">
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
@@ -1020,26 +1023,28 @@ function DetailScreen({
           </p>
         </div>
 
-        <div className="border-t border-border pt-3">
-          <button
-            onClick={() => setRawOpen(!rawOpen)}
-            className="flex items-center justify-between w-full"
-          >
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-              原始记录
-            </p>
-            <ChevronRight
-              className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
-                rawOpen ? "rotate-90" : ""
-              }`}
-            />
-          </button>
-          {rawOpen && (
-            <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-              {record.rawInput}
-            </p>
-          )}
-        </div>
+        {!isRawInputRedundant(record) && (
+          <div className="border-t border-border pt-3">
+            <button
+              onClick={() => setRawOpen(!rawOpen)}
+              className="flex items-center justify-between w-full"
+            >
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                原始记录
+              </p>
+              <ChevronRight
+                className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
+                  rawOpen ? "rotate-90" : ""
+                }`}
+              />
+            </button>
+            {rawOpen && (
+              <p className="text-sm text-muted-foreground leading-relaxed mt-2">
+                {record.rawInput}
+              </p>
+            )}
+          </div>
+        )}
 
         {(record.status === "saved" || record.status === "failed") && (
           <button

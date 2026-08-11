@@ -85,6 +85,15 @@ export function createBook(title: string, author?: string, now = new Date()): Bo
   };
 }
 
+// 整理成功后想法通常只是原始输入加了标点，重复展示是噪音；
+// 忽略标点和空白比较，一致则不再单独展示原始记录
+export function isRawInputRedundant(record: BookRecord) {
+  if (!record.rawInput.trim()) return true;
+  if (record.status !== "processed") return false;
+  const normalize = (text: string) => text.replace(/[^\p{L}\p{N}]/gu, "");
+  return normalize(record.rawInput) === normalize(record.thought ?? "");
+}
+
 export function recoverStaleRecords(
   state: AppState,
   activeIds?: ReadonlySet<string>
@@ -124,9 +133,6 @@ export function createCapture(params: {
   const rawInput = params.rawInput.trim();
   if (!params.photoUrl) {
     throw new Error("请先拍照");
-  }
-  if (!rawInput) {
-    throw new Error("请写下你的想法");
   }
 
   const now = params.now ?? new Date();

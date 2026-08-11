@@ -68,8 +68,8 @@ function normalizeAnalysisResult(value: unknown, fallbackThought = ""): CaptureA
   const thought = readString(source.thought) || fallbackThought.trim();
   const page = readPage(source.page);
 
-  if (!thought) {
-    throw new Error("整理结果缺少想法");
+  if (!thought && !quote) {
+    throw new Error("没有识别到划线内容");
   }
 
   return {
@@ -93,14 +93,14 @@ function buildPrompt(bookTitle: string, rawInput: string, hasHighlights: boolean
     "你是一个谨慎的中文读书笔记整理助手。你只基于照片和读者输入整理，不补充外部知识。",
     "你要把一条纸质书随手记录整理成结构化读书笔记。",
     `书名：${bookTitle || "未提供"}`,
-    `读者输入：${rawInput}`,
+    `读者输入：${rawInput || "（无，读者只划了线没有写想法）"}`,
     hasHighlights
       ? "照片中半透明黄色标记覆盖或紧邻的文字，是读者想记录的原文；请优先识别黄色标记区域，不要被未标记的相邻页面干扰。"
       : "照片中没有额外数字标记，请结合读者输入判断最可能被记录的原文。",
     "",
     "请先根据照片做 OCR，再结合读者输入判断：",
     "1. quote: 最可能被黄色标记、圈出、划线，或被读者提到的书中原文。必须来自照片或读者输入，不要改写，不确定就返回空字符串。",
-    "2. thought: 读者自己的想法。可以去掉口语停顿，但不要添加新观点。",
+    "2. thought: 读者自己的想法。可以去掉口语停顿，但不要添加新观点。读者没有输入想法时返回空字符串，不要编造。",
     "3. page: 只有当照片或读者输入明确出现页码时才填写数字，否则返回 null。",
     "",
     "不要编造页码、章节或原文。只返回符合 schema 的 JSON。",
@@ -190,9 +190,6 @@ export default {
 
     if (!imageDataUrl.startsWith("data:image/")) {
       return json({ error: "缺少有效照片" }, { status: 400 });
-    }
-    if (!rawInput) {
-      return json({ error: "缺少读者输入" }, { status: 400 });
     }
 
     const upstream = await fetch(upstreamUrl, {

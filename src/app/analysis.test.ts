@@ -26,6 +26,25 @@ describe("analysis", () => {
     });
   });
 
+  it("accepts quote-only results when the reader wrote no thought", () => {
+    const result = normalizeAnalysisResult(
+      { quote: "被划线的原文", thought: "", page: null },
+      ""
+    );
+
+    expect(result).toEqual({
+      quote: "被划线的原文",
+      thought: "",
+      page: undefined,
+    });
+  });
+
+  it("rejects results with neither quote nor thought", () => {
+    expect(() => normalizeAnalysisResult({ quote: "", thought: "", page: null }, "")).toThrow(
+      "没有识别到划线内容"
+    );
+  });
+
   it("falls back to raw input when the model omits thought", () => {
     const result = normalizeAnalysisResult({ quote: "", page: null }, "原始想法");
 

@@ -4,6 +4,7 @@ import {
   createBook,
   createCapture,
   formatTimestamp,
+  isRawInputRedundant,
   recoverStaleRecords,
 } from "./model";
 
@@ -18,6 +19,15 @@ describe("model", () => {
 
   it("rejects an empty book title", () => {
     expect(() => createBook("   ")).toThrow("书名不能为空");
+  });
+
+  it("allows a capture with photo only, no thought", () => {
+    const record = createCapture({
+      photoUrl: "data:image/jpeg;base64,abc",
+      rawInput: "   ",
+    });
+    expect(record.status).toBe("saved");
+    expect(record.rawInput).toBe("");
   });
 
   it("creates a saved capture from compressed photo and raw input", () => {
@@ -90,6 +100,28 @@ describe("model", () => {
     expect(result.changed).toBe(true);
     expect(result.state.books[0].records[0].status).toBe("processing");
     expect(result.state.books[0].records[1].status).toBe("failed");
+  });
+
+  it("marks raw input redundant when it matches the thought up to punctuation", () => {
+    const base = createCapture({
+      photoUrl: "data:image/jpeg;base64,a",
+      rawInput: "这两句话都很值得思考 公共事业有更多摩擦力要克服",
+    });
+    const processed = {
+      ...base,
+      status: "processed" as const,
+      thought: "这两句话都很值得思考，公共事业有更多摩擦力要克服。",
+    };
+    expect(isRawInputRedundant(processed)).toBe(true);
+
+    const different = { ...processed, thought: "完全不同的整理结果" };
+    expect(isRawInputRedundant(different)).toBe(false);
+
+    const failed = { ...base, status: "failed" as const };
+    expect(isRawInputRedundant(failed)).toBe(false);
+
+    const empty = { ...base, rawInput: "" };
+    expect(isRawInputRedundant(empty)).toBe(true);
   });
 
   it("leaves state untouched when no records are processing", () => {

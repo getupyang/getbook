@@ -41,8 +41,9 @@ export function normalizeAnalysisResult(
   const thought = readString(source.thought) || fallbackThought.trim();
   const page = readPage(source.page);
 
-  if (!thought) {
-    throw new Error("整理结果缺少想法");
+  // 想法可选：只划线的记录 thought 允许为空，但整理结果不能什么都没有
+  if (!thought && !quote) {
+    throw new Error("没有识别到划线内容");
   }
 
   return {
