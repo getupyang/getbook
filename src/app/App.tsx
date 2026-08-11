@@ -1169,14 +1169,27 @@ export default function App() {
         if (changed) {
           void saveAppState(loaded).catch(() => {});
         }
+        // 书架永远是历史栈的根，左滑返回才有明确的"上一页"
+        window.history.replaceState({ screen: "bookshelf" }, "");
         if (loaded.activeBookId && loaded.books.length > 0) {
           setScreen("book");
+          window.history.pushState({ screen: "book" }, "");
         }
       })
       .catch((error) => {
         setStorageError(error instanceof Error ? error.message : "本地存储读取失败");
         setState({ books: [], activeBookId: null });
       });
+  }, []);
+
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      const nav = event.state as { screen?: Screen; recordId?: string } | null;
+      setScreen(nav?.screen ?? "bookshelf");
+      setActiveRecordId(nav?.recordId ?? null);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   useEffect(() => {
@@ -1199,6 +1212,16 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const pushScreen = (next: Screen, recordId?: string) => {
+    setScreen(next);
+    setActiveRecordId(recordId ?? null);
+    window.history.pushState({ screen: next, recordId }, "");
+  };
+
+  const goBack = () => {
+    window.history.back();
+  };
 
   const activeBook = useMemo(() => {
     if (!state?.activeBookId) return null;
@@ -1305,7 +1328,7 @@ export default function App() {
       books: [book, ...state.books],
       activeBookId: book.id,
     });
-    setScreen("book");
+    pushScreen("book");
   };
 
   const openBook = async (book: Book) => {
@@ -1320,7 +1343,7 @@ export default function App() {
       activeBookId: book.id,
       books: state.books.map((item) => (item.id === book.id ? updatedBook : item)),
     });
-    setScreen("book");
+    pushScreen("book");
   };
 
   const saveRecord = async (record: BookRecord) => {
@@ -1342,8 +1365,8 @@ export default function App() {
     };
 
     await persist(nextState);
-    setActiveRecordId(record.id);
-    setScreen("detail");
+    // 保存后直接回书页，方便连续添加；整理在后台异步进行
+    goBack();
     void analyzeRecord(record.id, nextState);
   };
 
@@ -1374,7 +1397,7 @@ export default function App() {
           : record
       ),
     }));
-    setScreen("detail");
+    goBack();
   };
 
   const appContent = () => {
@@ -1389,12 +1412,9 @@ export default function App() {
       return (
         <BookScreen
           book={activeBook}
-          onBack={() => setScreen("bookshelf")}
-          onNewRecord={() => setScreen("new_record")}
-          onOpenRecord={(record) => {
-            setActiveRecordId(record.id);
-            setScreen("detail");
-          }}
+          onBack={goBack}
+          onNewRecord={() => pushScreen("new_record")}
+          onOpenRecord={(record) => pushScreen("detail", record.id)}
           onMarkExported={() => void markBookExported()}
         />
       );
@@ -1403,7 +1423,7 @@ export default function App() {
       return (
         <NewRecordScreen
           bookTitle={activeBook.title}
-          onBack={() => setScreen("book")}
+          onBack={goBack}
           onSave={saveRecord}
         />
       );
@@ -1413,7 +1433,7 @@ export default function App() {
         <EditScreen
           key={activeRecord.id}
           record={activeRecord}
-          onBack={() => setScreen("detail")}
+          onBack={goBack}
           onSave={saveEditedRecord}
         />
       );
@@ -1422,8 +1442,8 @@ export default function App() {
       return (
         <DetailScreen
           record={activeRecord}
-          onBack={() => setScreen("book")}
-          onEdit={() => setScreen("edit")}
+          onBack={goBack}
+          onEdit={() => pushScreen("edit", activeRecord.id)}
           onRetry={retryRecord}
         />
       );
@@ -1431,12 +1451,9 @@ export default function App() {
     return (
       <BookScreen
         book={activeBook}
-        onBack={() => setScreen("bookshelf")}
-        onNewRecord={() => setScreen("new_record")}
-        onOpenRecord={(record) => {
-          setActiveRecordId(record.id);
-          setScreen("detail");
-        }}
+        onBack={goBack}
+        onNewRecord={() => pushScreen("new_record")}
+        onOpenRecord={(record) => pushScreen("detail", record.id)}
         onMarkExported={() => void markBookExported()}
       />
     );
