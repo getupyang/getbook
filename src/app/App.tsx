@@ -13,16 +13,19 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Image as ImageIcon,
   Library,
   Loader2,
   Pencil,
   Plus,
   RotateCcw,
+  Share2,
   Undo2,
   X,
 } from "lucide-react";
 import { analyzeCapture } from "./analysis";
+import { formatRecordsForExport, newRecordsSince } from "./export";
 import {
   HIGHLIGHT_STROKE_COLOR,
   clampHighlightPoint,
@@ -285,23 +288,78 @@ function RecordCard({ record, onTap }: { record: BookRecord; onTap: () => void }
   );
 }
 
+async function copyTextToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function BookScreen({
   book,
   onBack,
   onNewRecord,
   onOpenRecord,
+  onMarkExported,
 }: {
   book: Book;
   onBack: () => void;
   onNewRecord: () => void;
   onOpenRecord: (record: BookRecord) => void;
+  onMarkExported: () => void;
 }) {
   const processingCount = book.records.filter((record) => record.status === "processing").length;
   const failedCount = book.records.filter((record) => record.status === "failed").length;
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
+  const newRecords = newRecordsSince(book, book.lastExportedAt);
+  const canShare = typeof navigator !== "undefined" && Boolean(navigator.share);
+
+  const closeExport = () => {
+    setExportOpen(false);
+    setExportNotice("");
+  };
+
+  const exportRecords = async (records: BookRecord[], method: "copy" | "share") => {
+    if (records.length === 0) return;
+    const text = formatRecordsForExport(book, records);
+    if (method === "copy") {
+      const ok = await copyTextToClipboard(text);
+      if (!ok) {
+        setExportNotice("复制失败，请重试");
+        return;
+      }
+      setExportNotice(`已复制 ${records.length} 条到剪贴板`);
+    } else {
+      try {
+        await navigator.share({ text });
+        setExportNotice(`已分享 ${records.length} 条`);
+      } catch {
+        return;
+      }
+    }
+    onMarkExported();
+    window.setTimeout(closeExport, 1200);
+  };
 
   return (
     <div className="h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-      <div className="flex items-center gap-2 px-4 pt-3 pb-3">
+      <div className="flex items-center justify-between px-4 pt-3 pb-3">
         <button
           onClick={onBack}
           className="flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -310,6 +368,15 @@ function BookScreen({
           <Library className="w-3.5 h-3.5" />
           <span className="ml-0.5">书架</span>
         </button>
+        {book.records.length > 0 && (
+          <button
+            onClick={() => setExportOpen(true)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            导出
+          </button>
+        )}
       </div>
 
       <div className="px-5 pb-4 border-b border-border">
@@ -370,6 +437,68 @@ function BookScreen({
           <p className="text-muted-foreground/60 text-xs mt-1">
             添加一张书页照片开始记录
           </p>
+        </div>
+      )}
+
+      {exportOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          onClick={closeExport}
+        >
+          <div
+            className="w-full max-w-[430px] bg-background rounded-t-3xl px-5 pt-5 pb-8"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-sm font-medium text-foreground mb-1">导出笔记</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              文字版读书笔记（不含照片），复制后可粘贴到任何地方
+            </p>
+            {exportNotice ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-foreground">
+                <Check className="w-4 h-4 text-green-600" />
+                {exportNotice}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {book.lastExportedAt && newRecords.length > 0 && (
+                  <button
+                    onClick={() => void exportRecords(newRecords, "copy")}
+                    className="w-full flex items-center justify-center gap-2 bg-foreground text-primary-foreground rounded-2xl py-3.5 text-[15px] font-medium active:scale-[0.98] transition-transform"
+                  >
+                    <Copy className="w-4 h-4" />
+                    复制新增 {newRecords.length} 条
+                  </button>
+                )}
+                {book.lastExportedAt && newRecords.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-1">
+                    上次导出后没有新记录
+                  </p>
+                )}
+                <button
+                  onClick={() => void exportRecords(book.records, "copy")}
+                  className="w-full flex items-center justify-center gap-2 border border-border text-foreground rounded-2xl py-3.5 text-[15px] font-medium active:scale-[0.98] transition-transform"
+                >
+                  <Copy className="w-4 h-4" />
+                  复制全部 {book.records.length} 条
+                </button>
+                {canShare && (
+                  <button
+                    onClick={() => void exportRecords(book.records, "share")}
+                    className="w-full flex items-center justify-center gap-2 border border-border text-foreground rounded-2xl py-3.5 text-[15px] font-medium active:scale-[0.98] transition-transform"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    分享全部…
+                  </button>
+                )}
+                <button
+                  onClick={closeExport}
+                  className="w-full text-muted-foreground rounded-2xl py-3 text-sm"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1151,6 +1280,7 @@ export default function App() {
         thought: analysis.thought,
         page: analysis.page,
         status: "processed",
+        updatedAt: new Date().toISOString(),
       }));
     } catch {
       await changeRecord(recordId, (record) => ({
@@ -1211,6 +1341,13 @@ export default function App() {
     void analyzeRecord(activeRecord.id);
   };
 
+  const markBookExported = async () => {
+    await updateActiveBook((book) => ({
+      ...book,
+      lastExportedAt: new Date().toISOString(),
+    }));
+  };
+
   const saveEditedRecord = async (patch: Pick<BookRecord, "quote" | "thought" | "page">) => {
     if (!activeRecord) return;
     await updateActiveBook((book) => ({
@@ -1221,6 +1358,7 @@ export default function App() {
               ...record,
               ...patch,
               status: "processed",
+              updatedAt: new Date().toISOString(),
             }
           : record
       ),
@@ -1246,6 +1384,7 @@ export default function App() {
             setActiveRecordId(record.id);
             setScreen("detail");
           }}
+          onMarkExported={() => void markBookExported()}
         />
       );
     }
@@ -1287,6 +1426,7 @@ export default function App() {
           setActiveRecordId(record.id);
           setScreen("detail");
         }}
+        onMarkExported={() => void markBookExported()}
       />
     );
   };

@@ -21,6 +21,7 @@ export interface BookRecord {
   quote?: string;
   thought?: string;
   page?: number;
+  updatedAt?: string;
 }
 
 export interface Book {
@@ -29,6 +30,7 @@ export interface Book {
   author?: string;
   records: BookRecord[];
   lastActive: string;
+  lastExportedAt?: string;
 }
 
 export interface AppState {
